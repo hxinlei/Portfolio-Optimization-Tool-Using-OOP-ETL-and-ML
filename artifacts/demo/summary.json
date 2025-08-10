@@ -1,0 +1,26 @@
+{
+  "tickers": [
+    "AAPL",
+    "MSFT",
+    "GOOGL"
+  ],
+  "investment": 15000.0,
+  "risk_free_rate": 0.0,
+  "weights": {
+    "AAPL": 0.23659,
+    "MSFT": 0.76341,
+    "GOOGL": 0.0
+  },
+  "exp_return": 0.27633331400074534,
+  "volatility": 0.27698251452769573,
+  "sharpe": 0.9976561678340693,
+  "discrete_allocation": {
+    "AAPL": 15,
+    "MSFT": 22
+  },
+  "cash_leftover": 74.8703618709169,
+  "mae": 0.010616993623545425,
+  "rmse": 0.014961338275018629,
+  "qa_answer": null,
+  "failed_tickers": []
+}

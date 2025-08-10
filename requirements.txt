@@ -1,0 +1,10 @@
+yfinance
+pandas
+numpy
+scikit-learn
+PyPortfolioOpt
+streamlit
+matplotlib
+plotly
+transformers
+torch
