@@ -4,7 +4,6 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-from transformers import pipeline as hf_pipeline
 import numpy as np
 
 from src.config import RunConfig, ARTIFACT_DIR
@@ -16,20 +15,11 @@ from src.storage import save_df, save_json
 
 plt.style.use("fivethirtyeight")
 
-FINANCE_CONTEXT = """
-A stock represents a share in the ownership of a company and constitutes a claim on part of the company’s assets and earnings.
-Bonds are fixed income instruments that represent loans made by an investor to a borrower, typically corporations or governments.
-Inflation is the rate at which the general level of prices for goods and services is rising and subsequently eroding purchasing power.
-A mutual fund pools money from many investors to purchase a diversified portfolio of stocks, bonds, or other securities.
-The stock market is a marketplace where investors can buy and sell shares of publicly traded companies.
-"""
-
 class FinancePipeline:
     def __init__(self, cfg: RunConfig):
         self.cfg = cfg
         self.extractor = YahooExtractor()
         self.optimizer = PortfolioOptimizer(risk_free_rate=cfg.risk_free_rate)
-        self.qa = hf_pipeline("question-answering", model="bert-large-uncased-whole-word-masking-finetuned-squad")
 
     def root(self) -> Path:
         p = ARTIFACT_DIR / self.cfg.cache_key
@@ -84,7 +74,7 @@ class FinancePipeline:
         return path
     # --------------------------------------------
 
-    def run(self, user_question: str | None = None) -> dict:
+    def run(self) -> dict:
         # ---- Extract ----
         data = self.extractor.download(self.cfg.tickers, self.cfg.start, self.cfg.end)
         close = data.close
@@ -125,12 +115,6 @@ class FinancePipeline:
         # Always save comparison (uses naive ML weights if ML skipped)
         alloc_cmp_png = self._save_alloc_comparison(port.weights, self.cfg.tickers, mlres)
 
-        # ---- Optional Q&A ----
-        answer = None
-        if user_question:
-            res = self.qa(question=user_question, context=FINANCE_CONTEXT)
-            answer = res.get("answer", "")
-
         # ---- Save artifacts & summary ----
         close_csv   = self.root() / "close.csv"
         returns_csv = self.root() / "returns.csv"
@@ -139,9 +123,11 @@ class FinancePipeline:
         save_df(rets, returns_csv)
         save_df(mlres.predictions, ml_csv)
 
-        # guard NaNs for summary
-        mae_val = 0.0 if (mlres.mae is None or (isinstance(mlres.mae, float) and np.isnan(mlres.mae))) else mlres.mae
-        rmse_val = 0.0 if (mlres.rmse is None or (isinstance(mlres.rmse, float) and np.isnan(mlres.rmse))) else mlres.rmse
+        # If the ML step was skipped, store null (not 0.0, which would look like a perfect score)
+        def _metric(x):
+            return None if x is None or np.isnan(x) else float(x)
+        mae_val = _metric(mlres.mae)
+        rmse_val = _metric(mlres.rmse)
 
         summary_path = self.root() / "summary.json"
         save_json({
@@ -156,7 +142,6 @@ class FinancePipeline:
             "cash_leftover": port.cash_leftover,
             "mae": mae_val,
             "rmse": rmse_val,
-            "qa_answer": answer,
             "failed_tickers": getattr(data, "failed", []),
         }, summary_path)
 

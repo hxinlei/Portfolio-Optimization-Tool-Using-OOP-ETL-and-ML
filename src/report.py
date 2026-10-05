@@ -19,10 +19,11 @@ def explain(summary: dict):
     print(f"Discrete Allocation: {summary['discrete_allocation']}")
     print(f"Cash Leftover:   ${summary['cash_leftover']:.2f}")
     print("\nML Evaluation:")
-    print(f"MAE:  {summary['mae']:.6f}")
-    print(f"RMSE: {summary['rmse']:.6f}")
-    if summary.get("qa_answer"):
-        print("\nQ&A:", summary["qa_answer"])
+    if summary.get("mae") is None:
+        print("Not available (not enough data to train the model)")
+    else:
+        print(f"MAE:  {summary['mae']:.6f}")
+        print(f"RMSE: {summary['rmse']:.6f}")
 
 def main(key: str):
     root = ARTIFACT_DIR / key

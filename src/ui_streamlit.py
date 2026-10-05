@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 
 from src.config import RunConfig, ARTIFACT_DIR
 from src.storage import load_df, load_json
+from src import chatbot
 
 # Lazy import to avoid circular/import timing issues
 FinancePipeline = None
@@ -32,7 +33,6 @@ with st.sidebar:
     end = st.date_input("End", value=pd.Timestamp.today()).strftime("%Y-%m-%d")
     invest = st.number_input("Investment Amount", min_value=100.0, value=15000.0, step=100.0)
     cache_key = st.text_input("Run name (cache key)", "demo")
-    question = st.text_input("Finance question (optional)", "")
 
 # Small helper to render the nice view for a given artifact key
 def render_results_for_key(key: str, show_paths: dict | None = None):
@@ -130,7 +130,7 @@ if st.button("Run Pipeline"):
     )
     try:
         FP = _get_pipeline()
-        paths = FP(cfg).run(user_question=question or None)
+        paths = FP(cfg).run()
         st.success("Done. Artifacts saved.")
         render_results_for_key(cache_key, show_paths=paths)
     except Exception as e:
@@ -165,3 +165,51 @@ with st.expander("Manage Artifacts (optional)"):
                 st.info(f"No artifacts found for key '{del_key}'.")
         else:
             st.info("Enter a key to delete.")
+
+st.markdown("---")
+
+# ---------------- Finance chatbot ----------------
+st.header("Finance Chatbot")
+st.caption("Ask about a finance term, or about the results of a saved run (for example: What is my Sharpe ratio?).")
+chat_key = st.text_input("Run to chat about", cache_key, key="chat_key")
+
+
+@st.cache_resource(show_spinner="Loading the language model (first question only)...")
+def _qa_model():
+    return chatbot.get_qa_model()
+
+
+_summary_path = ARTIFACT_DIR / chat_key / "summary.json"
+_summary = load_json(_summary_path) if _summary_path.exists() else None
+
+# Reload saved history when the app starts or the run changes
+if st.session_state.get("chat_loaded_for") != chat_key:
+    st.session_state["chat"] = chatbot.load_history(chat_key)
+    st.session_state["chat_loaded_for"] = chat_key
+
+
+def _show(msg: dict):
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+        if msg.get("latency_ms") is not None:
+            st.caption(f"Answered in {msg['latency_ms'] / 1000:.2f} s")
+
+
+for _m in st.session_state["chat"]:
+    _show(_m)
+
+_q = st.chat_input("Ask a finance question")
+if _q:
+    _prev = next((m["content"] for m in reversed(st.session_state["chat"]) if m["role"] == "user"), None)
+    _user = {"role": "user", "content": _q}
+    _show(_user)
+    _res = chatbot.answer(_q, summary=_summary, qa=_qa_model(), previous_question=_prev)
+    _bot = {"role": "assistant", "content": _res["answer"], "latency_ms": _res["latency_ms"]}
+    _show(_bot)
+    st.session_state["chat"] += [_user, _bot]
+    chatbot.save_history(chat_key, st.session_state["chat"])
+
+if st.session_state["chat"] and st.button("Clear chat history"):
+    st.session_state["chat"] = []
+    chatbot.save_history(chat_key, [])
+    st.rerun()

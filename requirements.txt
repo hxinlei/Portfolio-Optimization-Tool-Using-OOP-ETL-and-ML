@@ -8,3 +8,4 @@ matplotlib
 plotly
 transformers
 torch
+pytest
