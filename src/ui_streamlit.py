@@ -132,18 +132,34 @@ if st.button("Run Pipeline"):
         FP = _get_pipeline()
         paths = FP(cfg).run()
         st.success("Done. Artifacts saved.")
-        render_results_for_key(cache_key, show_paths=paths)
+        # Remember what to show, so the results stay on the page when the app reruns
+        # (Streamlit reruns the whole script on every interaction, e.g. a chat question)
+        st.session_state["shown_results"] = {"key": cache_key, "paths": paths, "source": "run"}
     except Exception as e:
         st.error(str(e))
         st.info("Tips: try fewer tickers, a shorter range (e.g., 2018–today), or wait 1–2 minutes to avoid Yahoo rate limits.")
+
+_shown = st.session_state.get("shown_results")
+if _shown and _shown["source"] == "run":
+    render_results_for_key(_shown["key"], show_paths=_shown["paths"])
 
 st.markdown("---")
 
 # ---------------- Load Results (manual) ----------------
 st.header("Load Results")
-key = st.text_input("Artifact key to load", "demo")
-if st.button("Load"):
-    render_results_for_key(key)
+key = st.text_input("Artifact key to load", "demo", key="load_key")
+
+
+def _load_clicked():
+    # Runs before the page redraws, so the run results above are hidden in the same rerun
+    st.session_state["shown_results"] = {"key": st.session_state["load_key"], "paths": None, "source": "load"}
+
+
+st.button("Load", on_click=_load_clicked)
+
+_shown = st.session_state.get("shown_results")
+if _shown and _shown["source"] == "load":
+    render_results_for_key(_shown["key"])
 
 st.markdown("---")
 
